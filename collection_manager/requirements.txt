@@ -14,7 +14,6 @@
 # limitations under the License.
 
 PyYAML==5.3.1
-pystache==0.5.4
 pysolr==3.9.0
 watchdog==0.10.2
 requests==2.23.0

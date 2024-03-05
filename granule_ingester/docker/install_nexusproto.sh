@@ -25,7 +25,7 @@ if [ ! -z ${BUILD_NEXUSPROTO+x} ]; then
   GIT_BRANCH=${2:-$MASTER}
 
   mkdir nexusproto
-  pushd nexusproto
+  cd nexusproto
   git init
   git pull ${GIT_REPO} ${GIT_BRANCH}
 
@@ -34,7 +34,7 @@ if [ ! -z ${BUILD_NEXUSPROTO+x} ]; then
   ./gradlew install --info
 
   rm -rf /root/.gradle
-  popd
+  cd ..
   rm -rf nexusproto
 else
   pip install nexusproto

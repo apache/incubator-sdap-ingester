@@ -29,7 +29,16 @@ logger = logging.getLogger(__name__)
 
 class TileReadingProcessor(TileProcessor, ABC):
 
-    def __init__(self, variable: Union[str, list], latitude: str, longitude: str, *args, **kwargs):
+    def __init__(
+            self,
+            variable: Union[str, list],
+            latitude: str,
+            longitude: str,
+            height: str = None,
+            depth: str = None,
+            *args,
+            **kwargs
+    ):
         try:
             self.variable = json.loads(variable)
         except Exception as e:
@@ -40,6 +49,20 @@ class TileReadingProcessor(TileProcessor, ABC):
             raise RuntimeError(f'variable list is empty: {self.variable}')
         self.latitude = latitude
         self.longitude = longitude
+
+        if height:
+            self.height = height
+            self.invert_z = False
+            if depth:
+                logger.warning('Both height and depth dimensions were specified. Favoring height')
+        elif depth:
+            self.height = depth
+            self.invert_z = True
+        else:
+            self.height = None
+            self.invert_z = None
+
+        # self.invert_z: if depth is specified instead of height, multiply it by -1, so it becomes height
 
     def process(self, tile, dataset: xr.Dataset, *args, **kwargs):
         logger.debug(f'Reading Processor: {type(self)}')
@@ -84,14 +107,15 @@ class TileReadingProcessor(TileProcessor, ABC):
 
     @staticmethod
     def _convert_to_timestamp(times: xr.DataArray) -> xr.DataArray:
-        if times.dtype == np.float32:
-            return times
-        elif times.dtype.type == np.timedelta64:    # If time is an array of offsets from a fixed reference
-            reference = times.time.item() / 1e9     # Get the base time in seconds
+        if times.dtype.type == np.timedelta64:  # If time is an array of offsets from a fixed reference
+            reference = times.time.item() / 1e9  # Get the base time in seconds
 
-            times = (times / 1e9).astype(int)       # Convert offset array to seconds
+            times = (times / 1e9).astype(int)  # Convert offset array to seconds
             times = times.where(times != -9223372036854775808)  # Replace NaT values with NaN
 
-            return times + reference    # Add base to offsets
+            return times + reference  # Add base to offsets
+        elif np.issubdtype(times.dtype, np.number):
+            return times
+
         epoch = np.datetime64(datetime.datetime(1970, 1, 1, 0, 0, 0))
         return ((times - epoch) / 1e9).astype(int)

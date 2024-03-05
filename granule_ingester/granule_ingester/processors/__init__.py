@@ -20,3 +20,7 @@ from granule_ingester.processors.TileSummarizingProcessor import TileSummarizing
 from granule_ingester.processors.kelvintocelsius import KelvinToCelsius
 from granule_ingester.processors.Subtract180FromLongitude import Subtract180FromLongitude
 from granule_ingester.processors.ForceAscendingLatitude import ForceAscendingLatitude
+from granule_ingester.processors.ElevationBounds import ElevationBounds
+from granule_ingester.processors.VerifyProcessor import VerifyProcessor
+from granule_ingester.processors.ElevationOffset import ElevationOffset
+from granule_ingester.processors.ElevationRange import ElevationRange

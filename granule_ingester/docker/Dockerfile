@@ -34,7 +34,7 @@ ARG BUILD_NEXUSPROTO
 ARG APACHE_NEXUSPROTO=https://github.com/apache/incubator-sdap-nexusproto.git
 ARG APACHE_NEXUSPROTO_BRANCH=master
 
-RUN ./install_nexusproto.sh
+RUN ./install_nexusproto.sh $APACHE_NEXUSPROTO $APACHE_NEXUSPROTO_BRANCH
 RUN cd /common && python setup.py install
 RUN cd /sdap && python setup.py install
 
