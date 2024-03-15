@@ -76,7 +76,9 @@ class Collection:
         """
         Accepting either `variable` or `variables` from the configmap
         """
-        logger.debug(f'incoming properties dict: {properties}')
+        # Inhibiting this for now...
+        # logger.debug(f'Incoming properties dict: {properties}')
+
         try:
             date_to = datetime.fromisoformat(properties['to']) if 'to' in properties else None
             date_from = datetime.fromisoformat(properties['from']) if 'from' in properties else None

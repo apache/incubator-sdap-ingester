@@ -96,6 +96,8 @@ class CollectionWatcher:
             with open(self._collections_path, 'r') as f:
                 collections_yaml = yaml.load(f, Loader=yaml.FullLoader)
             self._collections_by_dir.clear()
+            logger.info('Refreshing collection config')
+
             for collection_dict in collections_yaml['collections']:
                 try:
                     collection = Collection.from_dict(collection_dict)

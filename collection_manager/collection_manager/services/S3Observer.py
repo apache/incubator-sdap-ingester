@@ -20,8 +20,11 @@ import os
 import time
 from dataclasses import dataclass
 from typing import Set, Dict, Optional, Callable, Awaitable
+import logging
 
 import aioboto3
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -102,8 +105,14 @@ class S3Observer:
             watch_index = {**watch_index, **new_index}
         difference = set(new_cache.items()) - set(self._cache.items())
 
+        logger.info(f'S3 Poll completed; creating events for {len(difference)} found files')
+        logger.debug(f'(has_polled = {self._has_polled} || init_scan = {self._initial_scan}) = {self._has_polled or self._initial_scan}')
+
         if self._has_polled or self._initial_scan:
-            for (file, modified_date) in difference:
+            for i, (file, modified_date) in enumerate(difference):
+                if i % 100 == 0:
+                    logger.debug(f'Iterated over {i} items in diff')
+
                 watch = watch_index[file]
                 file_is_new = file not in self._cache
 
@@ -111,6 +120,10 @@ class S3Observer:
                     watch.event_handler.on_created(S3FileCreatedEvent(src_path=file, modified_time=modified_date))
                 else:
                     watch.event_handler.on_modified(S3FileModifiedEvent(src_path=file, modified_time=modified_date))
+
+                await asyncio.sleep(0)
+
+        logger.info('All S3 events for this poll have been created')
 
         self._cache = new_cache
         self._has_polled = True
@@ -122,11 +135,19 @@ class S3Observer:
         async with aioboto3.resource("s3") as s3:
             bucket = await s3.Bucket(self._bucket)
 
+            n_keys = 0
+
             object_key = S3Observer._get_object_key(path)
+            logger.debug(f'Listing objects for bucket {self._bucket} under path {object_key}')
             async for file in bucket.objects.filter(Prefix=object_key):
+                n_keys += 1
                 new_cache[f"s3://{file.bucket_name}/{file.key}"] = await file.last_modified
+
         end = time.perf_counter()
         duration = end - start
+
+        logger.info(f'Finished listing objects for bucket {self._bucket} under path {object_key}: Found {n_keys} in '
+                     f'{duration} seconds')
 
         return new_cache
 

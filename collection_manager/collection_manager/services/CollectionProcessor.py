@@ -46,6 +46,7 @@ class CollectionProcessor:
         :return: None
         """
         if not self._file_supported(granule):
+            logger.warning(f'Tried to process unsupported file {granule}. Skipping.')
             return
 
         history_manager = self._get_history_manager(collection.dataset_id)
