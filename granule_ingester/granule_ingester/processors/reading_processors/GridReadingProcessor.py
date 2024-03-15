@@ -36,14 +36,31 @@ class GridReadingProcessor(TileReadingProcessor):
         data_variable = self.variable[0] if isinstance(self.variable, list) else self.variable
         new_tile = nexusproto.GridTile()
 
+        expand_axes = []
+
         lat_subset = ds[self.latitude][type(self)._slices_for_variable(ds[self.latitude], dimensions_to_slices)]
         lon_subset = ds[self.longitude][type(self)._slices_for_variable(ds[self.longitude], dimensions_to_slices)]
-        lat_subset = np.ma.filled(np.squeeze(lat_subset), np.NaN)
-        lon_subset = np.ma.filled(np.squeeze(lon_subset), np.NaN)
+
+        lat_subset = np.squeeze(lat_subset)
+        if lat_subset.shape == ():
+            lat_subset = np.expand_dims(lat_subset, 0)
+            expand_axes.append(0)
+
+        lon_subset = np.squeeze(lon_subset)
+        if lon_subset.shape == ():
+            lon_subset = np.expand_dims(lon_subset, 0)
+            expand_axes.append(1)
+
+        lat_subset = np.ma.filled(lat_subset, np.NaN)
+        lon_subset = np.ma.filled(lon_subset, np.NaN)
 
         data_subset = ds[data_variable][type(self)._slices_for_variable(ds[data_variable],
                                                                         dimensions_to_slices)].data
         data_subset = np.array(np.squeeze(data_subset))
+
+        if len(expand_axes) > 0:
+            data_subset = np.expand_dims(data_subset, tuple(expand_axes))
+
 
         if self.depth:
             depth_dim, depth_slice = list(type(self)._slices_for_variable(ds[self.depth],

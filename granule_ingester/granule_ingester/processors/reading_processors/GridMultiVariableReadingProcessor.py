@@ -55,8 +55,17 @@ class GridMultiVariableReadingProcessor(TileReadingProcessor):
 
         lat_subset = ds[self.latitude][type(self)._slices_for_variable(ds[self.latitude], dimensions_to_slices)]
         lon_subset = ds[self.longitude][type(self)._slices_for_variable(ds[self.longitude], dimensions_to_slices)]
-        lat_subset = np.ma.filled(np.squeeze(lat_subset), np.NaN)
-        lon_subset = np.ma.filled(np.squeeze(lon_subset), np.NaN)
+
+        lat_subset = np.squeeze(lat_subset)
+        if lat_subset.shape == ():
+            lat_subset = np.expand_dims(lat_subset, 0)
+
+        lon_subset = np.squeeze(lon_subset)
+        if lon_subset.shape == ():
+            lon_subset = np.expand_dims(lon_subset, 0)
+
+        lat_subset = np.ma.filled(lat_subset, np.NaN)
+        lon_subset = np.ma.filled(lon_subset, np.NaN)
 
         if not isinstance(self.variable, list):
             raise ValueError(f'self.variable `{self.variable}` needs to be a list. use GridReadingProcessor for single band Grid files.')
