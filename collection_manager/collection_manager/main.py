@@ -96,6 +96,7 @@ async def main():
                                                        history_manager_builder=history_manager_builder)
             collection_watcher = CollectionWatcher(collections_path=options.collections_path,
                                                    granule_updated_callback=collection_processor.process_granule,
+                                                   dataset_added_callback=collection_processor.add_plugin_collection,
                                                    collections_refresh_interval=int(options.refresh),
                                                    s3_bucket=options.s3_bucket)
 

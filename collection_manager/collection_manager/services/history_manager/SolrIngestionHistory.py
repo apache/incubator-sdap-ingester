@@ -15,7 +15,7 @@
 
 import hashlib
 import logging
-
+from datetime import datetime
 import pysolr
 import requests
 from collection_manager.services.history_manager.IngestionHistory import (IngestionHistory, IngestionHistoryBuilder)
@@ -82,6 +82,20 @@ class SolrIngestionHistory(IngestionHistory):
                 'latest_update_l': self._latest_ingested_file_update}])
             self._solr_datasets.commit()
 
+    @run_in_executor
+    def _push_dataset(self, dataset_id, type, config):
+        if self._solr_datasets:
+            if len(self._solr_datasets.search(q=f'id:{dataset_id}')) == 0:
+                self._solr_datasets.add([{
+                    'id': dataset_id,
+                    'dataset_s': dataset_id,
+                    'latest_update_l': int(datetime.now().timestamp()),
+                    'store_type_s': type,
+                    'config': config,
+                    'source_s': 'collection_config'
+                }])
+                self._solr_datasets.commit()
+
     def _get_latest_file_update(self):
         results = self._solr_datasets.search(q=f"id:{self._dataset_id}")
         if results:
@@ -141,12 +155,15 @@ class SolrIngestionHistory(IngestionHistory):
                 schema_endpoint = f"{self._url_prefix}/{self._dataset_collection_name}/schema"
                 self._add_field(schema_endpoint, "dataset_s", "string")
                 self._add_field(schema_endpoint, "latest_update_l", "TrieLongField")
+                self._add_field(schema_endpoint, "store_type_s", "string", True)
+                self._add_field(schema_endpoint, "source_s", "string", True)
+                self._add_field(schema_endpoint, "config", "text_general", True)
 
         except requests.exceptions.RequestException as e:
             logger.error(f"solr instance unreachable {self._solr_url}")
             raise e
 
-    def _add_field(self, schema_url, field_name, field_type):
+    def _add_field(self, schema_url, field_name, field_type, stored=False):
         """
         Helper to add a string field in a solr schema
         :param schema_url:
@@ -158,7 +175,7 @@ class SolrIngestionHistory(IngestionHistory):
             "add-field": {
                 "name": field_name,
                 "type": field_type,
-                "stored": False
+                "stored": stored
             }
         }
         return self._req_session.post(schema_url, data=str(add_field_payload).encode('utf-8'))

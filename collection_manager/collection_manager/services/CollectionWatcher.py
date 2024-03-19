@@ -42,6 +42,7 @@ class CollectionWatcher:
     def __init__(self,
                  collections_path: str,
                  granule_updated_callback: Callable[[str, Collection], Awaitable],
+                 dataset_added_callback: Callable[[Collection], None],
                  s3_bucket: Optional[str] = None,
                  collections_refresh_interval: float = 30):
         if not os.path.isabs(collections_path):
@@ -49,6 +50,7 @@ class CollectionWatcher:
 
         self._collections_path = collections_path
         self._granule_updated_callback = granule_updated_callback
+        self._dataset_added_callback = dataset_added_callback
         self._collections_refresh_interval = collections_refresh_interval
 
         self._collections_by_dir: Dict[str, Set[Collection]] = defaultdict(set)
@@ -99,10 +101,13 @@ class CollectionWatcher:
             for collection_dict in collections_yaml['collections']:
                 try:
                     collection = Collection.from_dict(collection_dict)
-                    if collection.storage_type() != CollectionStorageType.REMOTE:
+                    if collection.storage_type() == CollectionStorageType.ZARR:
+                        self._dataset_added_callback(collection)
+                    elif collection.storage_type() != CollectionStorageType.REMOTE:
                         self._validate_collection(collection)
                         self._collections_by_dir[collection.directory()].add(collection)
                 except MissingValueCollectionError as e:
+                    logger.exception(e)
                     logger.error(f"A collection is missing '{e.missing_value}'. Ignoring this collection for now.")
                 except RelativePathCollectionError as e:
                     logger.error(f"Relative paths are not allowed for the 'path' property of a collection. "

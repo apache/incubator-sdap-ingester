@@ -33,6 +33,7 @@ class CollectionStorageType(Enum):
     LOCAL = 1
     S3 = 2
     REMOTE = 3
+    ZARR = 4
 
 
 @dataclass(frozen=True)
@@ -49,6 +50,8 @@ class Collection:
     preprocess: str = None
     processors: str = None
     group: str = None
+    store_type: str = None
+    config: str = None
 
     @staticmethod
     def __decode_dimension_names(dimension_names_dict):
@@ -81,13 +84,20 @@ class Collection:
             date_to = datetime.fromisoformat(properties['to']) if 'to' in properties else None
             date_from = datetime.fromisoformat(properties['from']) if 'from' in properties else None
 
+            store_type = properties.get('storeType')
+
+            slices = properties.get('slices', {})
+
             preprocess = json.dumps(properties['preprocess']) if 'preprocess' in properties else None
             extra_processors = json.dumps(properties['processors']) if 'processors' in properties else None
+            config = properties['config'] if 'config' in properties else None
+
+            projection = properties['projection'] if 'projection' in properties else None
 
             collection = Collection(dataset_id=properties['id'],
-                                    projection=properties['projection'],
+                                    projection=projection,
                                     dimension_names=frozenset(Collection.__decode_dimension_names(properties['dimensionNames'])),
-                                    slices=frozenset(properties['slices'].items()),
+                                    slices=frozenset(slices),
                                     path=properties['path'],
                                     historical_priority=properties['priority'],
                                     forward_processing_priority=properties.get('forward-processing-priority', None),
@@ -95,12 +105,17 @@ class Collection:
                                     date_from=date_from,
                                     preprocess=preprocess,
                                     processors=extra_processors,
-                                    group=properties.get('group'))
+                                    group=properties.get('group'),
+                                    store_type=store_type,
+                                    config=config
+                                    )
             return collection
         except KeyError as e:
             raise MissingValueCollectionError(missing_value=e.args[0])
 
     def storage_type(self):
+        if self.store_type == 'zarr':
+            return CollectionStorageType.ZARR
         if urlparse(self.path).scheme == 's3':
             return CollectionStorageType.S3
         elif urlparse(self.path).scheme in {'http', 'https'}:

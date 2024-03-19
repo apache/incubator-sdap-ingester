@@ -16,13 +16,14 @@
 import json
 import logging
 import os.path
-from typing import Dict
+from typing import Dict, Optional
 
 import yaml
 from collection_manager.entities import Collection
 from collection_manager.services import MessagePublisher
 from collection_manager.services.history_manager import (GranuleStatus,
-                                                         IngestionHistory)
+                                                         IngestionHistory,
+                                                         SolrIngestionHistory)
 from collection_manager.services.history_manager.IngestionHistory import \
     IngestionHistoryBuilder
 
@@ -74,12 +75,29 @@ class CollectionProcessor:
         await self._publisher.publish_message(body=dataset_config, priority=use_priority)
         await history_manager.push(granule, modified_time)
 
+    def add_plugin_collection(self, collection: Collection):
+        history_manager = self._get_history_manager(None)
+
+        if isinstance(history_manager, SolrIngestionHistory):
+            collection_config = {
+                'path': collection.path,
+                'config': collection.config
+            }
+
+            collection_dimensions = dict(collection.dimension_names)
+
+            collection_config['config']['variables'] = collection_dimensions['variable']
+            collection_config['config']['coords'] = {dim: collection_dimensions[dim]
+                                                     for dim in collection_dimensions if dim != 'variable'}
+
+            history_manager._push_dataset(collection.dataset_id, collection.store_type, json.dumps(collection_config))
+
     @staticmethod
     def _file_supported(file_path: str):
         ext = os.path.splitext(file_path)[-1]
         return ext in SUPPORTED_FILE_EXTENSIONS
 
-    def _get_history_manager(self, dataset_id: str) -> IngestionHistory:
+    def _get_history_manager(self, dataset_id: Optional[str]) -> IngestionHistory:
         if dataset_id not in self._history_manager_cache:
             self._history_manager_cache[dataset_id] = self._history_manager_builder.build(dataset_id=dataset_id)
         return self._history_manager_cache[dataset_id]
