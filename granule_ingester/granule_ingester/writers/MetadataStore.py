@@ -18,6 +18,8 @@ from abc import ABC, abstractmethod
 from nexusproto import DataTile_pb2 as nexusproto
 
 from granule_ingester.healthcheck import HealthCheck
+from asyncio import AbstractEventLoop
+
 
 from typing import List
 
@@ -30,4 +32,15 @@ class MetadataStore(HealthCheck, ABC):
     @abstractmethod
     def save_batch(self, tiles: List[nexusproto.NexusTile]) -> None:
         pass
+
+    @abstractmethod
+    def connect(self, loop: AbstractEventLoop = None) -> None:
+        pass
+
+    @abstractmethod
+    def close(self) -> None:
+        pass
+
+    def __del__(self):
+        self.close()
 

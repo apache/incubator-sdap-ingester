@@ -21,7 +21,7 @@ import logging
 from asyncio import AbstractEventLoop
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, List, Union
+from typing import Dict, List, Union, Tuple, Optional
 
 import pysolr
 from kazoo.exceptions import NoNodeError
@@ -51,7 +51,8 @@ class SolrStore(MetadataStore):
         self.geo_precision: int = 3
         self._collection: str = "nexustiles"
         self.log: logging.Logger = logging.getLogger(__name__)
-        self._solr = None
+        self._solr: Optional[pysolr.Solr] = None
+        self._zk: Optional[pysolr.ZooKeeper] = None
 
     def _get_collections(self, zk, parent_nodes):
         """
@@ -85,23 +86,33 @@ class SolrStore(MetadataStore):
             collections.update(json.loads(zk.zk.get(f"{parent_node}/{c}/state.json")[0].decode("utf-8")))
         zk.collections = collections
 
-    def _get_connection(self) -> pysolr.Solr:
+    def _get_connection(self) -> Tuple[pysolr.Solr, Union[pysolr.ZooKeeper, None]]:
         if self._zk_url:
             zk = pysolr.ZooKeeper(f"{self._zk_url}")
             self._set_solr_status(zk)
-            return pysolr.SolrCloud(zk, self._collection, always_commit=True)
+            return pysolr.SolrCloud(zk, self._collection, always_commit=True), zk
         elif self._solr_url:
-            return pysolr.Solr(f'{self._solr_url}/solr/{self._collection}', always_commit=True)
+            return pysolr.Solr(f'{self._solr_url}/solr/{self._collection}', always_commit=True), None
         else:
             raise RuntimeError("You must provide either solr_host or zookeeper_host.")
 
     def connect(self, loop: AbstractEventLoop = None):
-        self._solr = self._get_connection()
+        self._solr, self._zk = self._get_connection()
+
+    def close(self):
+        if self._solr is not None:
+            self._solr.get_session().close()
+
+        if self._zk is not None:
+            self._zk.zk.stop()
+            self._zk.zk.close()
 
     async def health_check(self):
         try:
-            connection = self._get_connection()
+            connection, _ = self._get_connection()
             connection.ping()
+
+            self.close()
         except pysolr.SolrError:
             raise SolrFailedHealthCheckError("Cannot connect to Solr!")
         except NoNodeError:

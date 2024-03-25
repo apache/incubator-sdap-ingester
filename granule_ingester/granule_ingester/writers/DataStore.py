@@ -23,6 +23,17 @@ from typing import List
 
 
 class DataStore(HealthCheck, ABC):
+    @abstractmethod
+    def connect(self):
+        ...
+
+    @abstractmethod
+    def close(self):
+        ...
+
+    def __del__(self):
+        self.close()
+
 
     @abstractmethod
     def save_data(self, nexus_tile: nexusproto.NexusTile) -> None:

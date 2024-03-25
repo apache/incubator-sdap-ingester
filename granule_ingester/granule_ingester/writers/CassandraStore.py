@@ -86,9 +86,17 @@ class CassandraStore(DataStore):
     def connect(self):
         self._session = self._get_session()
 
-    def __del__(self):
-        if self._session:
-            self._session.shutdown()
+    def close(self):
+        session: Session = self._session
+        if session is not None:
+            cluster = session.cluster
+
+            session.shutdown()
+            cluster.shutdown()
+
+            del cluster, session
+
+            self._session = None
 
     @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=1, max=12))
     async def save_data(self, tile: NexusTile) -> None:
