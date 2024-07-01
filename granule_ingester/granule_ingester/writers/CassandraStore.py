@@ -23,7 +23,7 @@ from datetime import datetime
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from cassandra.auth import PlainTextAuthProvider
-from cassandra.cluster import Cluster, Session, NoHostAvailable
+from cassandra.cluster import Cluster, Session, NoHostAvailable, ExecutionProfile, EXEC_PROFILE_DEFAULT
 from cassandra.cqlengine import columns
 from cassandra.cqlengine.models import Model
 from cassandra.policies import RetryPolicy, ConstantReconnectionPolicy
@@ -34,6 +34,7 @@ from granule_ingester.exceptions import CassandraFailedHealthCheckError, Cassand
 from granule_ingester.writers.DataStore import DataStore
 
 from typing import List
+from time import sleep
 
 logging.getLogger('cassandra').setLevel(logging.INFO)
 logger = logging.getLogger(__name__)
@@ -76,8 +77,13 @@ class CassandraStore(DataStore):
         cluster = Cluster(contact_points=self._contact_points,
                           port=self._port,
                           # load_balancing_policy=
+                          execution_profiles={
+                              EXEC_PROFILE_DEFAULT: ExecutionProfile(
+                                  request_timeout=60.0,
+                                  retry_policy=RetryPolicy()
+                              )
+                          },
                           reconnection_policy=ConstantReconnectionPolicy(delay=5.0),
-                          default_retry_policy=RetryPolicy(),
                           auth_provider=auth_provider)
         session = cluster.connect()
         session.set_keyspace(self._keyspace)
@@ -98,7 +104,7 @@ class CassandraStore(DataStore):
 
             self._session = None
 
-    @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=1, max=12))
+    @retry(stop=stop_after_attempt(5), wait=wait_exponential(multiplier=1, min=3, max=30))
     async def save_data(self, tile: NexusTile) -> None:
         try:
             tile_id = uuid.UUID(tile.summary.tile_id)
@@ -122,24 +128,35 @@ class CassandraStore(DataStore):
         writing = 0
 
         for batch in batches:
-            futures = []
-
             writing += len(batch)
 
             logger.info(f'Writing batch of {len(batch)} tiles to Cassandra | ({writing}/{n_tiles}) [{writing/n_tiles*100:7.3f}%]')
 
-            for tile in batch:
-                tile_id = uuid.UUID(tile.summary.tile_id)
-                serialized_tile_data = TileData.SerializeToString(tile.tile)
+            while len(batch) > 0:
+                futures = []
+                failed = []
 
-                cassandra_future = self._session.execute_async(prepared_query, [tile_id, bytearray(serialized_tile_data)])
-                asyncio_future = asyncio.Future()
-                cassandra_future.add_callbacks(asyncio_future.set_result, asyncio_future.set_exception)
+                for tile in batch:
+                    tile_id = uuid.UUID(tile.summary.tile_id)
+                    serialized_tile_data = TileData.SerializeToString(tile.tile)
 
-                futures.append(asyncio_future)
+                    cassandra_future = self._session.execute_async(prepared_query, [tile_id, bytearray(serialized_tile_data)])
+                    asyncio_future = asyncio.Future()
+                    cassandra_future.add_callbacks(asyncio_future.set_result, asyncio_future.set_exception)
 
-            for f in futures:
-                await f
+                    futures.append((tile, asyncio_future))
+
+                for t, f in futures:
+                    try:
+                        await f
+                    except Exception:
+                        failed.append(t)
+
+                if len(failed) > 0:
+                    logger.warning(f'Need to retry {len(failed)} tiles')
+                    sleep(10)
+
+                batch = failed
 
         logger.info(f'Wrote {len(tiles)} tiles to Cassandra in {str(datetime.now() - thetime)} seconds')
 

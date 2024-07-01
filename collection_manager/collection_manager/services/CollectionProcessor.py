@@ -117,12 +117,22 @@ class CollectionProcessor:
 
         if collection.projection == 'Grid':
             processors.append({'name': 'forceAscendingLatitude'})
-        processors.append({'name': 'kelvinToCelsius'})
-        processors.append({
-            'name': 'tileSummary',
-            'dataset_name': collection.dataset_id
-        })
-        processors.append({'name': 'generateTileId'})
+
+        processors.extend([
+            {
+                'name': 'kelvinToCelsius'
+            },
+            {
+                'name': 'verifyShape'
+            },
+            {
+                'name': 'tileSummary',
+                'dataset_name': collection.dataset_id
+            },
+            {
+                'name': 'generateTileId'
+            },
+        ])
 
         return processors
     

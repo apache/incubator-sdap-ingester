@@ -54,16 +54,28 @@ class ForceAscendingLatitude(TileProcessor):
         data = from_shaped_array(the_tile_data.variable_data)
         if len(latitudes) < 2:
             logger.debug(f'Not enough latitude in data to flip. No need to do so..')
+
+            if 'dataset' in kwargs:
+                kwargs['dataset'].attrs['_FlippedLat'] = (False, None)
+
             return tile
         delta = latitudes[1] - latitudes[0]
         if delta >= 0:
             logger.debug(f'Only reverse latitude ordering if current ordering is descending.. No need to do so..')
+
+            if 'dataset' in kwargs:
+                kwargs['dataset'].attrs['_FlippedLat'] = (False, None)
+
             return tile
         logger.debug(f'flipping latitudes')
         latitudes = np.flip(latitudes)
         latitude_axis = self.__get_latitude_axis(tile.summary.data_dim_names)
         logger.debug(f'flipping data on axis: {latitude_axis}')
         data = np.flip(data, axis=latitude_axis)
+
+        if 'dataset' in kwargs:
+            kwargs['dataset'].attrs['_FlippedLat'] = (True, latitude_axis)
+
         the_tile_data.latitude.CopyFrom(to_shaped_array(latitudes))
         the_tile_data.variable_data.CopyFrom(to_shaped_array(data))
         return tile

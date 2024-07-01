@@ -25,11 +25,19 @@ from granule_ingester.processors.reading_processors.TileReadingProcessor import 
 
 
 class GridReadingProcessor(TileReadingProcessor):
-    def __init__(self, variable, latitude, longitude, depth=None, time=None, **kwargs):
-        super().__init__(variable, latitude, longitude, **kwargs)
+    def __init__(
+            self,
+            variable,
+            latitude,
+            longitude,
+            height=None,
+            depth=None,
+            time=None,
+            **kwargs
+    ):
+        super().__init__(variable, latitude, longitude, height, depth, **kwargs)
         if isinstance(variable, list) and len(variable) != 1:
             raise RuntimeError(f'TimeSeriesReadingProcessor does not support multiple variable: {variable}')
-        self.depth = depth
         self.time = time
 
     def _generate_tile(self, ds: xr.Dataset, dimensions_to_slices: Dict[str, slice], input_tile):
@@ -62,15 +70,19 @@ class GridReadingProcessor(TileReadingProcessor):
             data_subset = np.expand_dims(data_subset, tuple(expand_axes))
 
 
-        if self.depth:
-            depth_dim, depth_slice = list(type(self)._slices_for_variable(ds[self.depth],
+        if self.height:
+            depth_dim, depth_slice = list(type(self)._slices_for_variable(ds[self.height],
                                                                           dimensions_to_slices).items())[0]
             depth_slice_len = depth_slice.stop - depth_slice.start
             if depth_slice_len > 1:
                 raise RuntimeError(
                     "Depth slices must have length 1, but '{dim}' has length {dim_len}.".format(dim=depth_dim,
                                                                                                 dim_len=depth_slice_len))
-            new_tile.depth = ds[self.depth][depth_slice].item()
+            if self.invert_z:
+                ds[self.height] = ds[self.height] * -1
+
+            new_tile.min_elevation = ds[self.height][depth_slice].item()
+            new_tile.max_elevation = ds[self.height][depth_slice].item()
 
         if self.time:
             time_slice = dimensions_to_slices[self.time]
